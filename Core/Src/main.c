@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "mpu60x0.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,6 +42,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart2;
+I2C_HandleTypeDef hi2c1;
 
 /* USER CODE BEGIN PV */
 
@@ -50,6 +52,7 @@ UART_HandleTypeDef huart2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -89,20 +92,38 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t buffer[] = "Hello World\r\n";
+  MPU6050_Data_t mpu_data;
+  char msg[128];
+  if (MPU6050_Init(&hi2c1) != HAL_OK) {
+    strcpy(msg, "MPU6050 init failed!\r\n");
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    while (1);
+  }
+  strcpy(msg, "MPU6050 init OK\r\n");
+  HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-  HAL_UART_Transmit(&huart2, (uint8_t *)buffer, sizeof(buffer), HAL_MAX_DELAY);
-	HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
-	HAL_Delay(1000);
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
+    if (MPU6050_Read_All(&hi2c1, &mpu_data) == HAL_OK) {
+      snprintf(msg, sizeof(msg),
+        "AX:%6d AY:%6d AZ:%6d | GX:%6d GY:%6d GZ:%6d\r\n",
+        mpu_data.accel_x, mpu_data.accel_y, mpu_data.accel_z,
+        mpu_data.gyro_x, mpu_data.gyro_y, mpu_data.gyro_z);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    } else {
+      strcpy(msg, "MPU6050 read error!\r\n");
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    }
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
+    HAL_Delay(200);
+    /* USER CODE END 3 */
   }
   /* USER CODE END 3 */
 }
@@ -218,7 +239,22 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+static void MX_I2C1_Init(void)
+{
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 400000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
 /* USER CODE END 4 */
 
 /**
